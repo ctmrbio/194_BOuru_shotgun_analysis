@@ -1,0 +1,34 @@
+sample,project,location,location_type,sample_type,number_sampling_point_P,DNA_conc,pH,EC (mS/cm2),As (mg/Kg),Cd (mg/Kg),Pb (mg/Kg),Ni (mg/Kg),Cu (mg/Kg),Zn (mg/Kg),Hg,Fe,Al,Au,Te,Ag,Co,Cr,Mg,Sn,Bi
+P1WF,UruUru_Poopo,San Jose Mine,acid mine drainage,water filter,1,NA,2.2,0.155,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA
+P2WF,UruUru_Poopo,Tagarete River,River,water filter,2,3.12,8.1,0.0074,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA
+P3WF,UruUru_Poopo,Poopó River,River,water filter,3,0.088,7,97,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA
+P4WF,UruUru_Poopo,Hot Spring wells,Hot spring,water filter,4,NA,6.8,142,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA
+P5WF,UruUru_Poopo,Sora Sora River,River,water filter,5,0.0224,3.7,69.4,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA
+P1S1,UruUru_Poopo,San Jose Mine,Mine,sediment,1,NA,2.2,0.155,2500,26,1100,9.6,1700,610,0.5,15000,1700,0.63,0.54,23,3.6,7,630,NA,93
+P2S1,UruUru_Poopo,Tagarete River,River,sediment,2,1.42,8.1,0.0074,71,4.3,300,30,160,720,3.3,710,540,0.65,0.13,8.6,15,130,6100,48,19
+P3S1,UruUru_Poopo,Poopó River,River,sediment,3,0.986,7,97,180,71,170,33,270,9000,14,7300,2300,0.05,0.11,7,17,60,7000,37,12
+P4S1,UruUru_Poopo,Hot Spring wells,Hot spring,sediment,4,1.53,6.8,142,67,13,310,11,21,720,15,630,200,0.06,0.09,11,8.9,11,3500,79,1.3
+P4S2,UruUru_Poopo,Hot Spring wells,Hot spring,sediment,4,2.56,6.8,142,140,130,300,25,92,10000,5.7,24000,8300,0.02,0.07,9.7,15,39,4100,130,3
+P4S3,UruUru_Poopo,Hot Spring wells,Hot spring,sediment,4,3.02,6.8,142,84,27,190,25,32,3200,4.4,18000,7800,0.01,0.07,5.6,14,37,3200,46,2.2
+P5S1,UruUru_Poopo,Sora Sora River,River,sediment,5,1.35,3.7,69.4,600,25,65,11,610,1000,18,23000,3300,0.01,0.04,9.3,12,24,910,290,180
+P5S2,UruUru_Poopo,Sora Sora River,River,sediment,5,3.86,3.7,69.4,330,8,480,23,260,380,8.1,7100,4200,0.03,0.08,10,8.9,37,5100,140,89
+P4B1,UruUru_Poopo,Hot Spring wells,Hot spring,biofilm,4,NA,6.8,142,110,0.7,17,32,2.6,68,22,120,NA,0.17,0.18,0.7,0.2,NA,7900,13,NA
+P4B2,UruUru_Poopo,Hot Spring wells,Hot spring,biofilm,4,9.16,6.8,142,4100,0.2,17,8.4,17,86,530,43000,290,0.05,0.04,0.3,0.6,3,13,11,NA
+PK1,Milluni,Pata Khota,Lake,sediment,1,24.8,8.22,0.00822,7.7,1.1,26,15,11,87,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA
+PK2,Milluni,Pata Khota,Lake,sediment,2,8.76,7.82,0.00782,8.3,1.6,58,19,13,154,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA
+PK3,Milluni,Pata Khota,Lake,sediment,3,25,8.01,0.00801,12,1.6,33,19,13,122,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA
+JK1,Milluni,Jankho Khota,Lake,sediment,1,38.4,7.94,0.00794,30,8.1,96,32,100,2570,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA
+JK2,Milluni,Jankho Khota,Lake,sediment,2,3,7.98,0.00798,21,3.7,40,27,34,890,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA
+JK3,Milluni,Jankho Khota,Lake,sediment,3,35.4,7.61,0.00761,14,2.2,21,26,12,326,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA
+MC1,Milluni,Milluni Chico,Lake,sediment,1,2.56,2.36,10.23,38,6,43,24,48,660,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA
+MC2,Milluni,Milluni Chico,Lake,sediment,2,3.42,2.26,10.81,36,6,65,26,87,943,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA
+MC3,Milluni,Milluni Chico,Lake,sediment,3,3.04,2.35,9.01,38,5,86,23,84,310,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA
+MG1,Milluni,Milluni Grande,Lake,sediment,1,0.32,2.58,5.24,29,2.5,181,14,138,216,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA
+MG2,Milluni,Milluni Grande,Lake,sediment,2,4.14,2.63,5.17,23,1.8,215,31,103,316,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA
+MG3,Milluni,Milluni Grande,Lake,sediment,3,0.0348,2.63,5.42,27,2.8,136,22,118,306,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA
+sP1R,Milluni,Puente Español,River,sediment,1,5.14666667,8.68,2.40566667,48.67,1.17,52,29,53,123.33,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA
+fP1R,Milluni,Puente Español,River,water filter,1,1.15,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA
+sP2R,Milluni,Tagarete River,River,sediment,2,2.76533333,7.42,9.439,24.77,0.96,23,18,22.67,60.33,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA
+fP2R,Milluni,Tagarete River,River,water filter,2,6.15,NA,NA,0,0,0,0,0.01,0.06,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA
+sP3R,Milluni,Uru Uru,Lake,sediment,3,9.26,6.63666667,10.7866667,108,42,312.5,46.5,119.5,1811.5,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA
+fP3R,Milluni,Uru Uru,Lake,water filter,3,7.4,NA,NA,0,0.01,0.01,0,0.04,0.36,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA,NA

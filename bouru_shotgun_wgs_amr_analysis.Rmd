@@ -1,0 +1,491 @@
+---
+title: "AMR Gene Analysis"
+author: "Shawn Higdon"
+date: "2022-12-02"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Load Libraries
+
+```{r, message=FALSE, include=FALSE}
+
+packages <- c("tidyverse", "ggrepel", "ComplexHeatmap", "RColorBrewer", "viridis",
+              "reshape2", "patchwork", "ggpubr", "microbiome", "microbiomeutilities",
+              "phyloseq", "picante", "metacoder")
+
+lapply(packages, library, character.only = TRUE)
+```
+
+
+# Read in Data
+
+> Load AMR analytics matrix output from [STAG](https://github.com/ctmrbio/stag-mwc/blob/master/docs/source/modules.rst#amrplusplus_v2) run.
+
+```{r}
+# read in csv as df
+amr.data <- read.csv("data/AMR_analytics_matrix.csv", header = T)
+
+# extract rownames as variable
+amr.data$annotation <- row.names(amr.data)
+
+# convert to tibble
+amr.df <- as_tibble(amr.data)
+
+# split annotation by delimiter '|' with the resulting new variables 
+amr.df <- amr.df |> separate("annotation",
+                   into = c("lvl_5", "lvl_1", "lvl_2", "lvl_3", "lvl_4", "bonus"),
+                   sep = "\\|",
+                   remove = FALSE)
+
+
+```
+
+
+# Data Breakdown
+
+## Annotations
+```{r}
+amr.df |> select('lvl_1', 'lvl_2', 'lvl_3', 'lvl_4', 'lvl_5') |> modify_if(is.character, as.factor) -> amr.anno
+str(amr.anno)
+summary(amr.anno)
+```
+
+# Make Phyloseq
+
+## Counts
+```{r}
+# make count_matrix from amr.df
+amr.otu <- amr.df |> select(1:30, 'lvl_5')
+amr.otu <- as.data.frame(amr.otu)
+rownames(amr.otu) <- amr.otu$lvl_5
+amr.otu <- amr.otu[,-31]
+amr.otu.mat <- as.matrix(amr.otu)
+
+# phyloseq it
+amr.otu.ps = otu_table(amr.otu.mat, taxa_are_rows = TRUE)
+```
+
+
+## Tax Table
+```{r}
+# make taxonomy table for amr gene hits from amr.anno
+amr.tax <- as.data.frame(amr.anno)
+rownames(amr.tax) <- amr.tax$lvl_5
+amr.tax <- amr.tax[,-5]
+amr.tax.mat <- as.matrix(amr.tax)
+
+# phyloseq it
+amr.tax.ps = tax_table(amr.tax.mat)
+```
+
+
+## Make Phyloseq
+```{r}
+amr.ps0 <- phyloseq(amr.otu.ps, amr.tax.ps)
+amr.ps0
+```
+
+
+## Add Sample Data
+```{r}
+# Read in the sample map file (list has strictly static order, numeric ascending)
+sample_map <- read.csv("data/sample_map_file.csv", header = T, row.names = 1, stringsAsFactors = T)
+
+# create phyloseq sample map from dataframe
+sampledata <- sample_data(sample_map, errorIfNULL = TRUE)
+
+amr.ps <- merge_phyloseq(amr.ps0, sampledata)
+amr.ps
+```
+
+
+# Evaluate Dataset
+
+## Sample Sums
+
+```{r}
+sort(sample_sums(amr.ps))
+```
+
+
+> P1S1 was removed by STAG
+> P1WF was removed by STAG
+> P4B1 was removed by STAG
+> P5WF has very low total counts for mapped reads >> suggest to remove from analysis since it was for the microbiome community analysis.
+> P4WF has very low total counts for mapped reads >> suggest to remove from analysis since it was for the microbiome community analysis.
+
+
+# Data Normalisation and Preprocessing
+
+> The data was normalized to account for variation among samples in sequencing depth using rarefaction method implemented by STAG prior to reading results into R.
+>
+> Additionally, the data can be filtered to prune taxa acting as "noise" with low counts and prevalence overall
+>
+> These normalized counts are then transformed 2 ways:
+>
+> * Centered-log-ratio transformation (sparsity)
+>
+> * Relative Abundance
+>
+
+```{r Preprocessing bp transform}
+# prune taxa (AMR genes)
+amr.ps2 <- phyloseq::prune_taxa(phyloseq::taxa_sums(amr.ps) > 1000, amr.ps)
+amr.ps
+amr.ps2
+
+# relative abundance
+amr.ps.relab <- transform_sample_counts(amr.ps2, function(x){ x / sum(x)})
+
+# Centered Log Ratio Transformation (CLR) transform to adjust for sparsity (zeros)
+amr.ps.clr <- transform(amr.ps2, transform = 'clr')
+
+```
+
+> Pruning to keep only AMR genes with mapped read counts across all samples ≥ 1000 removes 986 AMR genes
+
+# All Gene Analysis
+
+## Beta Diversity Tests
+
+```{r}
+# Define metadata
+metadata <- as(sample_data(amr.ps), "data.frame")
+
+# calculate AMR gene composition distances
+amr.clr.distmat <- phyloseq::distance(amr.ps.clr, method = "euclidean")
+```
+
+
+### Location
+
+#### PERMANOVA
+```{r}
+#reproducible
+set.seed(8888)
+
+# calculate microbiome AMR composition distances
+# ADONIS test
+
+## location
+amr.pnova_location <- adonis2(phyloseq::distance(amr.ps.clr, method="euclidean") ~ location,
+                     data = metadata, method = "euclidean")
+amr.pnova_location
+```
+
+
+#### BETA DISPERSION
+
+```{r}
+
+#Dispersion test and plot
+amr.dispr_loc <- vegan::betadisper(amr.clr.distmat, phyloseq::sample_data(amr.ps.clr)$location)
+amr.dispr_loc
+
+#Ordination Centroids and Dispersion Labeled: Aitchison Distance
+amr.ord_cen <- plot(amr.dispr_loc, main = "", sub = "")
+amr.ord_cen
+
+# extract data for ggplot
+#ord_sites.long <- BiodiversityR::sites.long(ord_cen)
+# boxplot
+amr.ord_box_loc <- boxplot(amr.dispr_loc, main = "", xlab = "", xaxt='n')
+amr.tick <- seq_along(amr.ord_box_loc$names)
+axis(1, at = amr.tick, labels = FALSE)
+text(amr.tick, par("usr")[2] - 0, amr.ord_box_loc$names, srt = 45, xpd = TRUE)
+
+# permutation test
+permutest(amr.dispr_loc)
+
+
+```
+
+
+#### ORDINATION
+
+```{r}
+# create sample_id variable
+sample_data(amr.ps.clr)['sample_id'] <- row.names(sample_data(amr.ps.clr))
+
+# set orination parameters
+amr_ord_all_clr <- phyloseq::ordinate(amr.ps.clr, "RDA")
+
+#Plot scree plot
+phyloseq::plot_scree(amr_ord_all_clr) + 
+  geom_bar(stat="identity", fill = "blue") +
+  labs(x = "\nAxis", y = "Proportion of Variance\n")
+
+#Scale axes and plot ordination
+clr1 <- amr_ord_all_clr$CA$eig[1] / sum(amr_ord_all_clr$CA$eig)
+clr2 <- amr_ord_all_clr$CA$eig[2] / sum(amr_ord_all_clr$CA$eig)
+
+# plot ordination
+amr_ord_all_clr_loc_pca <- phyloseq::plot_ordination(amr.ps.clr, amr_ord_all_clr, type = "samples", color="location")
+
+# aesthetics of ordination plot
+amr_ord_all_clr_loc_pca <- amr_ord_all_clr_loc_pca + 
+  geom_point(size = 2) +
+  coord_fixed(clr2 / clr1) +
+  stat_ellipse(aes(group = location), linetype = 2) +
+  labs(color = "Sample Location") +
+  geom_text_repel(label = sample_data(amr.ps.clr)$sample_id, show.legend = FALSE) +
+  theme(legend.title = element_text(size = 14),
+        legend.text = element_text(face = "bold", size = 10),
+        title = element_text(face = "bold", size = 14),
+        axis.title.x = element_text(face = "bold", size = 13),
+        axis.title.y = element_text(face = "bold", size = 13),
+        axis.text.x = element_text(size = 12),
+        axis.text.y = element_text(size = 12))
+
+# print ordination plot
+amr_pca_allsam_loc <- print(amr_ord_all_clr_loc_pca)
+
+amr_pca_allsam_loc
+
+```
+
+
+### Location Type
+
+##### PERMANOVA
+```{r}
+#reproducible
+set.seed(8888)
+
+# calculate microbiome AMR composition distances
+# ADONIS test
+
+## location
+amr.pnova_ltype <- adonis2(phyloseq::distance(amr.ps.clr, method="euclidean") ~ location_type,
+                     data = metadata, method = "euclidean")
+amr.pnova_ltype
+```
+
+#### BETA DISPERSION
+
+```{r}
+
+#Dispersion test and plot
+amr.dispr_lt <- vegan::betadisper(amr.clr.distmat, phyloseq::sample_data(amr.ps.clr)$location_type)
+amr.dispr_lt
+
+#Ordination Centroids and Dispersion Labeled: Aitchison Distance
+amr.ord_cen <- plot(amr.dispr_lt, main = "", sub = "")
+amr.ord_cen
+
+# extract data for ggplot
+#ord_sites.long <- BiodiversityR::sites.long(ord_cen)
+# boxplot
+amr.ord_box_lt <- boxplot(amr.dispr_lt, main = "", xlab = "", xaxt='n')
+amr.tick <- seq_along(amr.ord_box_lt$names)
+axis(1, at = amr.tick, labels = FALSE)
+text(amr.tick, par("usr")[2] - 0, amr.ord_box_lt$names, srt = 45, xpd = TRUE)
+
+# permutation test
+permutest(amr.dispr_lt)
+
+
+```
+
+
+#### ORDINATION
+
+```{r}
+# create sample_id variable
+sample_data(amr.ps.clr)['sample_id'] <- row.names(sample_data(amr.ps.clr))
+
+# set orination parameters
+amr_ord_all_clr <- phyloseq::ordinate(amr.ps.clr, "RDA")
+
+#Plot scree plot
+phyloseq::plot_scree(amr_ord_all_clr) + 
+  geom_bar(stat="identity", fill = "blue") +
+  labs(x = "\nAxis", y = "Proportion of Variance\n")
+
+#Scale axes and plot ordination
+clr1 <- amr_ord_all_clr$CA$eig[1] / sum(amr_ord_all_clr$CA$eig)
+clr2 <- amr_ord_all_clr$CA$eig[2] / sum(amr_ord_all_clr$CA$eig)
+
+# plot ordination
+amr_ord_all_clr_lt_pca <- phyloseq::plot_ordination(amr.ps.clr, amr_ord_all_clr, type = "samples", color="location_type")
+
+# aesthetics of ordination plot
+amr_ord_all_clr_lt_pca <- amr_ord_all_clr_lt_pca + 
+  geom_point(size = 2) +
+  coord_fixed(clr2 / clr1) +
+  stat_ellipse(aes(group = location_type), linetype = 2) +
+  labs(color = "Sample Location Type") +
+  geom_text_repel(label = sample_data(amr.ps.clr)$sample_id, show.legend = FALSE) +
+  theme(legend.title = element_text(size = 14),
+        legend.text = element_text(face = "bold", size = 10),
+        title = element_text(face = "bold", size = 14),
+        axis.title.x = element_text(face = "bold", size = 13),
+        axis.title.y = element_text(face = "bold", size = 13),
+        axis.text.x = element_text(size = 12),
+        axis.text.y = element_text(size = 12))
+
+# print ordination plot
+amr_pca_allsam_lt <- print(amr_ord_all_clr_lt_pca)
+
+amr_pca_allsam_lt
+
+```
+
+
+
+
+
+
+# AMR Composition
+
+```{r}
+
+### DECIDE how many taxa you want to see
+topN = 14 # all others will be grouped in "Others"
+
+mycolors <- colorRampPalette(brewer.pal(8, "Paired"))(topN+1)
+```
+
+
+### By Location
+
+#### Top L1
+```{r}
+amr_topL1 <- amr.ps2 %>%  #choose dataset
+  psmelt %>% group_by(lvl_1) %>% # melt the table and group by tax level
+  summarise(Abundance=sum(Abundance)) %>% # find most overall abundant taxa
+  arrange(desc(Abundance)) %>% # order them 
+  mutate(aggTaxo=as.factor(case_when( # aggTaxo will become the plot legend
+    row_number()<=topN~lvl_1, row_number()>topN~'Others'))) %>% 
+  dplyr::select(-Abundance) %>% #flush abundance value
+  head(n=topN+1) # +1 to include the Others section! 
+
+### CREATE an object that will be fed into ggplot
+amr_comp_plot.L1 <- amr.ps2 %>% # choose dataset
+  psmelt %>% # "melt" the phyloseq object into a table
+  inner_join(.,amr_topL1, by="lvl_1") %>% # use topTaxa to join aggTaxo variable
+  aggregate(Abundance~location+aggTaxo, # Abundance is aggregated...
+            data=., FUN=sum) # ...sums "Others" taxa by specified variables
+
+# Relative abundance counts plot
+amr_relab_top_L1_location <- ggplot(amr_comp_plot.L1, aes(x=location, y=Abundance, fill=aggTaxo)) +
+  geom_bar(stat="identity",position="fill") + # change to "stack" to plot total counts
+  labs(title="Top L1 AMR Class",
+       fill="MEGARES Level 1", x="Location", y="Relative abundance") +
+  #facet_wrap(~sample_type) + # RHS of the tilde is columns; add scales="free" to hide samples without counts
+  scale_fill_manual(values = mycolors,breaks=c(pull(amr_topL1, lvl_1),"Others")) +
+  theme(axis.line=element_blank(),
+        axis.ticks=element_blank(),
+        plot.margin = unit(c(1,0.5,1,2), "cm"),
+        plot.caption.position="plot",
+        axis.title.y.left = element_text(vjust=3),
+        axis.text.x = element_text(angle = 30, vjust = 1, hjust = 1),
+        axis.title.x = element_blank())
+
+amr_relab_top_L1_location
+
+ggsave("./output/plots/amr_relab_top_L1_location_amrplusplus.pdf", amr_relab_top_L1_location)
+```
+
+#### Top L2
+```{r}
+amr_topL2 <- amr.ps2 %>%  #choose dataset
+  psmelt %>% group_by(lvl_2) %>% # melt the table and group by tax level
+  summarise(Abundance=sum(Abundance)) %>% # find most overall abundant taxa
+  arrange(desc(Abundance)) %>% # order them 
+  mutate(aggTaxo=as.factor(case_when( # aggTaxo will become the plot legend
+    row_number()<=topN~lvl_2, row_number()>topN~'Others'))) %>% 
+  dplyr::select(-Abundance) %>% #flush abundance value
+  head(n=topN+1) # +1 to include the Others section! 
+
+### CREATE an object that will be fed into ggplot
+amr_comp_plot.L2 <- amr.ps2 %>% # choose dataset
+  psmelt %>% # "melt" the phyloseq object into a table
+  inner_join(.,amr_topL2, by="lvl_2") %>% # use topTaxa to join aggTaxo variable
+  aggregate(Abundance~location+aggTaxo, # Abundance is aggregated...
+            data=., FUN=sum) # ...sums "Others" taxa by specified variables
+
+# Relative abundance counts plot
+amr_relab_top_L2_location <- ggplot(amr_comp_plot.L2, aes(x=location, y=Abundance, fill=aggTaxo)) +
+  geom_bar(stat="identity",position="fill") + # change to "stack" to plot total counts
+  labs(title="Top L2 AMR Class",
+       fill="MEGARES Level 2", x="Location", y="Relative abundance") +
+  #facet_wrap(~sample_type) + # RHS of the tilde is columns; add scales="free" to hide samples without counts
+  scale_fill_manual(values = mycolors,breaks=c(pull(amr_topL2, lvl_2),"Others")) +
+  theme(axis.line=element_blank(),
+        axis.ticks=element_blank(),
+        plot.margin = unit(c(1,0.5,1,2), "cm"),
+        plot.caption.position="plot",
+        axis.title.y.left = element_text(vjust=3),
+        axis.text.x = element_text(angle = 30, vjust = 1, hjust = 1),
+        axis.title.x = element_blank())
+
+amr_relab_top_L2_location
+
+ggsave("./output/plots/amr_relab_top_L2_location_amrplusplus.pdf", amr_relab_top_L2_location)
+```
+
+#### Top L3
+```{r}
+amr_topL3 <- amr.ps2 %>%  #choose dataset
+  psmelt %>% group_by(lvl_3) %>% # melt the table and group by tax level
+  summarise(Abundance=sum(Abundance)) %>% # find most overall abundant taxa
+  arrange(desc(Abundance)) %>% # order them 
+  mutate(aggTaxo=as.factor(case_when( # aggTaxo will become the plot legend
+    row_number()<=topN~lvl_3, row_number()>topN~'Others'))) %>% 
+  dplyr::select(-Abundance) %>% #flush abundance value
+  head(n=topN+1) # +1 to include the Others section! 
+
+### CREATE an object that will be fed into ggplot
+amr_comp_plot.L3 <- amr.ps2 %>% # choose dataset
+  psmelt %>% # "melt" the phyloseq object into a table
+  inner_join(.,amr_topL3, by="lvl_3") %>% # use topTaxa to join aggTaxo variable
+  aggregate(Abundance~location+aggTaxo, # Abundance is aggregated...
+            data=., FUN=sum) # ...sums "Others" taxa by specified variables
+
+# Relative abundance counts plot
+amr_relab_top_L3_location <- ggplot(amr_comp_plot.L3, aes(x=location, y=Abundance, fill=aggTaxo)) +
+  geom_bar(stat="identity",position="fill") + # change to "stack" to plot total counts
+  labs(title="Top L3 AMR Classes",
+       fill="MEGARES Level 3", x="Location", y="Relative abundance") +
+  #facet_wrap(~sample_type) + # RHS of the tilde is columns; add scales="free" to hide samples without counts
+  scale_fill_manual(values = mycolors,breaks=c(pull(amr_topL3, lvl_3),"Others")) +
+  theme(axis.line=element_blank(),
+        axis.ticks=element_blank(),
+        plot.margin = unit(c(1,0.5,1,2), "cm"),
+        plot.caption.position="plot",
+        axis.title.y.left = element_text(vjust=3),
+        axis.text.x = element_text(angle = 30, vjust = 1, hjust = 1),
+        axis.title.x = element_blank(),
+        legend.text = element_text(size = 8))
+
+amr_relab_top_L3_location
+
+ggsave("./output/plots/amr_relab_top_L3_location_amrplusplus.pdf", amr_relab_top_L3_location)
+```
+
+
+Next Steps:
+
+[?] Correlation between ARG Subgroup Abundance and Microbial Community Abundance.
+[?] Co-occurrence of MRG with ARG based on location site.
+
+Correlate a taxonomic unit --> 
+
+[?] MAGs
+
+ * Highest reads and highest ARG count
+
+
+Isolate all the mercury resistant?
+
+Metal Resistance
+
+
+
+
+
