@@ -246,6 +246,8 @@ amr_pca_allsam_loc <- print(amr_ord_all_clr_loc_pca)
 
 amr_pca_allsam_loc
 
+ggsave("output/plots/pca_amr_location.pdf", amr_pca_allsam_loc, dpi = 600)
+
 ```
 
 

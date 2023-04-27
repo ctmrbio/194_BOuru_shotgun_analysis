@@ -17,7 +17,6 @@ packages <- c("rhdf5", "tidyverse", "ggrepel", "phyloseq", "biomformat",
               "ComplexHeatmap", "RColorBrewer", "viridis", "DESeq2",
               "reshape2", "patchwork", "microbiome", "microbiomeutilities",
               "picante", "ggpubr", "metacoder")
-=
 lapply(packages, library, character.only = TRUE)
 ```
 
@@ -235,6 +234,7 @@ pca_allsam_loc <- print(bp_ord_all_clr_loc_pca)
 
 pca_allsam_loc
 
+ggsave("output/plots/pca_gtdb_location.pdf", pca_allsam_loc, dpi = 600)
 ```
 
 
@@ -730,46 +730,7 @@ heat_tree(metacoder::filter_taxa(obj, taxon_names == "Bacteria", subtaxa = TRUE)
           layout = "fruchterman-reingold")
 ```
 
-## Milluni Subset Only
-
-
-```{r}
-# subset dataset with 5 low read samples removed
-bp_milluni <- subset_samples(bp, project == "Milluni")
-bp_milluni
-```
-
-
-```{r}
-# prune taxa
-bpm2 <- phyloseq::prune_taxa(phyloseq::taxa_sums(bp) > 1000, bp_milluni)
-bpm2
-```
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
- Taxa Summary
+###Taxa Summary
 
 > taxa with relative abundances less than 0.01 were removed.
 
@@ -795,4 +756,171 @@ dom.tax$dominant_overview
 ```{r}
 test <- as.data.frame(otu_table(bp_cpm))
 ```
+
+
+
+
+
+
+
+
+
+
+## Milluni Subset Only
+
+
+```{r}
+# subset dataset with 5 low read samples removed
+bp_milluni <- subset_samples(bp, project == "Milluni")
+bp_milluni
+```
+
+
+```{r}
+# prune taxa
+bpm2 <- phyloseq::prune_taxa(phyloseq::taxa_sums(bp) > 1000, bp_milluni)
+bpm2
+```
+
+### Data Normalisation and Preprocessing
+
+> The data must be normalized to account for variation among samples in sequencing depth. This is achieved by converting abundances to counts per million.
+>
+> Additionally, the data must be filtered to prune taxa acting as "noise" with low counts and prevalence overall
+>
+> CPM normalized counts are then transformed 2 ways:
+>
+> * Centered-log-ratio transformation
+>
+> * Relative Abundance
+>
+
+
+```{r Preprocessing bp transform}
+
+# transform to even sampling depth with Phyloseq CPM method
+bpm_cpm <- transform_sample_counts(bpm2, function(x) 1E6 * x/sum(x))
+
+# relative abundance
+bpm_cpm_relab <- transform_sample_counts(bpm_cpm, function(x){ x / sum(x)})
+
+# Centered Log Ratio Transformation (CLR) transform to adjust for sparsity (zeros)
+bpm_cpm_clr <- transform(bpm_cpm, transform = 'clr')
+
+```
+
+
+### Beta Diversity Tests
+
+```{r}
+# Define metadata
+bpm_metadata <- as(sample_data(bpm_cpm_clr), "data.frame")
+
+# calculate microbiome composition distances
+bpm_clr_dist_mat <- phyloseq::distance(bpm_cpm_clr, method = "euclidean")
+```
+
+
+#### Location
+
+##### PERMANOVA
+```{r}
+#reproducible
+set.seed(8888)
+
+# calculate microbiome composition distances
+# ADONIS test
+
+## location
+bpm_permanova_location <- adonis2(phyloseq::distance(bpm_cpm_clr, method="euclidean") ~ location,
+                     data = bpm_metadata, method = "euclidean")
+bpm_permanova_location
+```
+
+##### BETA DISPERSION
+
+```{r}
+
+#Dispersion test and plot
+bpm_dispr_loc <- vegan::betadisper(bpm_clr_dist_mat, phyloseq::sample_data(bpm_cpm_clr)$location)
+bpm_dispr_loc
+
+#Ordination Centroids and Dispersion Labeled: Aitchison Distance
+bpm_ord_cen <- plot(bpm_dispr_loc, main = "", sub = "")
+bpm_ord_cen
+
+# extract data for ggplot
+#ord_sites.long <- BiodiversityR::sites.long(ord_cen)
+# boxplot
+bpm_ord_box_loc <- boxplot(bpm_dispr_loc, main = "", xlab = "", xaxt='n')
+tick <- seq_along(ord_box_loc$names)
+axis(1, at = tick, labels = FALSE)
+text(tick, par("usr")[2] - 0, bpm_ord_box_loc$names, srt = 45, xpd = TRUE)
+
+# permutation test
+permutest(bpm_dispr_loc)
+
+
+```
+
+##### ORDINATION
+
+```{r}
+# create sample_id variable
+sample_data(bpm_cpm_clr)['sample_id'] <- row.names(sample_data(bpm_cpm_clr))
+
+# set orination parameters
+bpm_ord_all_clr <- phyloseq::ordinate(bpm_cpm_clr, "RDA")
+
+#Plot scree plot
+phyloseq::plot_scree(bpm_ord_all_clr) + 
+  geom_bar(stat="identity", fill = "blue") +
+  labs(x = "\nAxis", y = "Proportion of Variance\n")
+
+#Scale axes and plot ordination
+clr1 <- bpm_ord_all_clr$CA$eig[1] / sum(bpm_ord_all_clr$CA$eig)
+clr2 <- bpm_ord_all_clr$CA$eig[2] / sum(bpm_ord_all_clr$CA$eig)
+
+# plot ordination
+bpm_ord_all_clr_loc_pca <- phyloseq::plot_ordination(bpm_cpm_clr, bpm_ord_all_clr, type = "samples", color="location")
+
+# aesthetics of ordination plot
+bpm_ord_all_clr_loc_pca <- bpm_ord_all_clr_loc_pca + 
+  geom_point(size = 2) +
+  coord_fixed(clr2 / clr1) +
+  stat_ellipse(aes(group = location), linetype = 2) +
+  labs(color = "Sample Location") +
+  geom_text_repel(label = sample_data(bpm_cpm_clr)$sample_id, show.legend = FALSE) +
+  theme(legend.title = element_text(size = 14),
+        legend.text = element_text(face = "bold", size = 10),
+        title = element_text(face = "bold", size = 14),
+        axis.title.x = element_text(face = "bold", size = 13),
+        axis.title.y = element_text(face = "bold", size = 13),
+        axis.text.x = element_text(size = 12),
+        axis.text.y = element_text(size = 12))
+
+# print ordination plot
+bpm_pca_allsam_loc <- print(bpm_ord_all_clr_loc_pca)
+
+bpm_pca_allsam_loc
+
+ggsave("output/plots/milluni_pca_gtdb_location.pdf", bpm_pca_allsam_loc, dpi = 600)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 
 
