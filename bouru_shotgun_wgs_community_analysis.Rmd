@@ -16,7 +16,7 @@ knitr::opts_chunk$set(echo = TRUE)
 packages <- c("rhdf5", "tidyverse", "ggrepel", "phyloseq", "biomformat",
               "ComplexHeatmap", "RColorBrewer", "viridis", "DESeq2",
               "reshape2", "patchwork", "microbiome", "microbiomeutilities",
-              "picante", "ggpubr", "metacoder")
+              "picante", "ggpubr", "metacoder", "randomcoloR")
 lapply(packages, library, character.only = TRUE)
 ```
 
@@ -31,7 +31,7 @@ Kraken Reports were used as input for Bayesian Re-estimation of Taxa Abundance u
 
 ```{r}
 # read in hdf5 biom table from kraken-biom output of bracken reports
-bracken_biom_file <- read_hdf5_biom("./data/bouru_shotgun_bracken_biome_gtdbr89.hdf5")
+bracken_biom_file <- read_hdf5_biom("./data/bouru_shotgun_bracken_biome_gtdbr202.hdf5")
 
 # create biom object
 bracken_biom <- biom(bracken_biom_file)
@@ -66,9 +66,6 @@ bracken_physeq <- merge_phyloseq(bracken_physeq, bracken_sam)
 ## remove Kingdom/Domain NA's
 tax_table(bracken_physeq) <- tax_table(bracken_physeq)[,1:7]
 head(tax_table(bracken_physeq))
-
-
-bp_urupoo <- subset_samples(bracken_physeq, project == "UruUru_Poopo")
 
 
 ntaxa(bp_milluni)
@@ -522,7 +519,7 @@ relab_top_phyla_location <- ggplot(plot_bp_phyla, aes(x=location, y=Abundance, f
 
 relab_top_phyla_location
 
-ggsave("./output/plots/relab_top_phyla_location_gtdbr89.pdf", relab_top_phyla_location)
+ggsave("./output/plots/relab_top_phyla_location_gtdbr202.pdf", relab_top_phyla_location)
 ```
 
 #### Top Family
@@ -563,7 +560,7 @@ relab_top_family_location <- ggplot(plot_bp_family, aes(x=location, y=Abundance,
 
 relab_top_family_location
 
-ggsave("./output/plots/relab_top_family_location_gtdbr89.pdf", relab_top_family_location)
+ggsave("./output/plots/relab_top_family_location_gtdbr202.pdf", relab_top_family_location)
 
 ```
 
@@ -606,7 +603,7 @@ relab_top_genera_location <- ggplot(plot_bp_genera, aes(x=location, y=Abundance,
 
 relab_top_genera_location
 
-ggsave("./output/plots/relab_top_genera_location_gtdbr89.pdf", relab_top_genera_location)
+ggsave("./output/plots/relab_top_genera_location_gtdbr202.pdf", relab_top_genera_location)
 ```
 
 
@@ -638,7 +635,7 @@ relab_top_phyla_lt <- ggplot(plot_bp_phyla.lt, aes(x=location_type, y=Abundance,
 
 relab_top_phyla_lt
 
-ggsave("./output/plots/relab_top_phyla_location-type_gtdbr89.pdf", relab_top_phyla_lt)
+ggsave("./output/plots/relab_top_phyla_location-type_gtdbr202.pdf", relab_top_phyla_lt)
 ```
 
 #### Top Family
@@ -667,7 +664,7 @@ relab_top_family_lt <- ggplot(plot_bp_family.lt, aes(x=location_type, y=Abundanc
 
 relab_top_family_lt
 
-ggsave("./output/plots/relab_top_family_location-type_gtdbr89.pdf", relab_top_family_lt)
+ggsave("./output/plots/relab_top_family_location-type_gtdbr202.pdf", relab_top_family_lt)
 ```
 
 #### Top Genera
@@ -696,7 +693,7 @@ relab_top_genera_lt <- ggplot(plot_bp_genera.lt, aes(x=location_type, y=Abundanc
 
 relab_top_genera_lt
 
-ggsave("./output/plots/relab_top_genera_location-type_gtdbr89.pdf", relab_top_genera_lt)
+ggsave("./output/plots/relab_top_genera_location-type_gtdbr202.pdf", relab_top_genera_lt)
 ```
 
 ### Metacoder plots
@@ -908,16 +905,405 @@ ggsave("output/plots/milluni_pca_gtdb_location.pdf", bpm_pca_allsam_loc, dpi = 6
 ```
 
 
+## UruUru PooPo Subset Only
+
+> GTDB r202 used with Kraken2 / Bracken 2
 
 
+```{r}
+# subset dataset with 5 low read samples removed
+bpu <- subset_samples(bp, project == "UruUru_Poopo")
+bpu
+
+print(sample_names(bpu))
+
+```
 
 
+```{r}
+# prune taxa
+bpu2 <- phyloseq::prune_taxa(phyloseq::taxa_sums(bp) > 1000, bpu)
+bpu2
+
+# create 8th tax rank to combine genus and species
+label_ranks <- c("Genus", "Species")
+labels <- apply(tax_table(bpu2)[, label_ranks], 1, paste, sep="", collapse=" ")
+## add concatenated labels as a new rank after Species2
+tax_table(bpu2) <- cbind(tax_table(bpu2), Species2=labels)
+head(tax_table(bpu2))
+```
+
+### Data Normalisation and Preprocessing
+
+> The data must be normalized to account for variation among samples in sequencing depth. This is achieved by converting abundances to counts per million.
+>
+> Additionally, the data must be filtered to prune taxa acting as "noise" with low counts and prevalence overall
+>
+> CPM normalized counts are then transformed 2 ways:
+>
+> * Centered-log-ratio transformation
+>
+> * Relative Abundance
+>
 
 
+```{r Preprocessing bp transform}
+
+# transform to even sampling depth with Phyloseq CPM method
+bpu_cpm <- transform_sample_counts(bpu2, function(x) 1E6 * x/sum(x))
+
+# relative abundance
+bpu_cpm_relab <- transform_sample_counts(bpu_cpm, function(x){ x / sum(x)})
+
+# Centered Log Ratio Transformation (CLR) transform to adjust for sparsity (zeros)
+bpu_cpm_clr <- transform(bpu_cpm, transform = 'clr')
+
+```
 
 
+### Beta Diversity Tests
+
+```{r}
+# Define metadata
+bpu_metadata <- as(sample_data(bpu_cpm_clr), "data.frame")
+
+# calculate microbiome composition distances
+bpu_clr_dist_mat <- phyloseq::distance(bpu_cpm_clr, method = "euclidean")
+```
 
 
+#### Location
+
+##### PERMANOVA
+```{r}
+#reproducible
+set.seed(8888)
+
+# calculate microbiome composition distances
+# ADONIS test
+
+## location
+bpu_permanova_location <- adonis2(phyloseq::distance(bpu_cpm_clr, method="euclidean") ~ location,
+                     data = bpu_metadata, method = "euclidean")
+bpu_permanova_location
+```
+
+##### BETA DISPERSION
+
+```{r}
+
+#Dispersion test and plot
+bpu_dispr_loc <- vegan::betadisper(bpu_clr_dist_mat, phyloseq::sample_data(bpu_cpm_clr)$location)
+bpu_dispr_loc
+
+#Ordination Centroids and Dispersion Labeled: Aitchison Distance
+bpu_ord_cen <- plot(bpu_dispr_loc, main = "", sub = "")
+bpu_ord_cen
+
+# extract data for ggplot
+#ord_sites.long <- BiodiversityR::sites.long(ord_cen)
+# boxplot
+bpu_ord_box_loc <- boxplot(bpu_dispr_loc, main = "", xlab = "", xaxt='n')
+tick <- seq_along(ord_box_loc$names)
+axis(1, at = tick, labels = FALSE)
+text(tick, par("usr")[2] - 0, bpu_ord_box_loc$names, srt = 45, xpd = TRUE)
+
+# permutation test
+permutest(bpu_dispr_loc)
+
+
+```
+
+##### ORDINATION
+
+```{r}
+# create sample_id variable
+sample_data(bpu_cpm_clr)['sample_id'] <- row.names(sample_data(bpu_cpm_clr))
+
+# set orination parameters
+bpu_ord_all_clr <- phyloseq::ordinate(bpu_cpm_clr, "RDA")
+
+#Plot scree plot
+phyloseq::plot_scree(bpu_ord_all_clr) + 
+  geom_bar(stat="identity", fill = "blue") +
+  labs(x = "\nAxis", y = "Proportion of Variance\n")
+
+#Scale axes and plot ordination
+clr1 <- bpu_ord_all_clr$CA$eig[1] / sum(bpu_ord_all_clr$CA$eig)
+clr2 <- bpu_ord_all_clr$CA$eig[2] / sum(bpu_ord_all_clr$CA$eig)
+
+# plot ordination
+bpu_ord_all_clr_loc_pca <- phyloseq::plot_ordination(bpu_cpm_clr, bpu_ord_all_clr, type = "samples", color="location")
+
+# aesthetics of ordination plot
+bpu_ord_all_clr_loc_pca <- bpu_ord_all_clr_loc_pca + 
+  geom_point(size = 2) +
+  coord_fixed(clr2 / clr1) +
+  stat_ellipse(aes(group = location), linetype = 2) +
+  labs(color = "Sample Location") +
+  geom_text_repel(label = sample_data(bpu_cpm_clr)$sample_id, show.legend = FALSE) +
+  theme(legend.title = element_text(size = 14),
+        legend.text = element_text(face = "bold", size = 10),
+        title = element_text(face = "bold", size = 14),
+        axis.title.x = element_text(face = "bold", size = 13),
+        axis.title.y = element_text(face = "bold", size = 13),
+        axis.text.x = element_text(size = 12),
+        axis.text.y = element_text(size = 12))
+
+# print ordination plot
+bpu_pca_allsam_loc <- print(bpu_ord_all_clr_loc_pca)
+
+bpu_pca_allsam_loc
+
+ggsave("output/plots/bouru-jessica-betadiv.pdf", bpu_pca_allsam_loc, dpi = 600)
+```
+
+### Alpha Div
+
+#### Obs. Richness vs. Total Reads
+```{r}
+ggplot(data = data.frame("total_reads" =  phyloseq::sample_sums(bpu),
+                         "observed" = phyloseq::estimate_richness(bpu, measures = "Observed")[, 1]),
+       aes(x = total_reads, y = observed)) +
+  geom_point() +
+  geom_smooth(method="lm", se = FALSE) +
+  labs(x = "\nTotal Reads", y = "Observed Richness\n")
+```
+
+> Positive upward trend between Observed Richness and total number of reads for each sample, as expected.
+
+#### Shannon Div
+
+> Boxplot visualizations with wilcox. test for significant differences in Shannon Diversity Index measurements. 
+
+##### Location
+###### Boxplot
+```{r}
+bpu_all_boxplot_loc <- plot_richness(bpu_cpm, x = "location", measures = c("Shannon"))#, title = "Microbiome Alpha Diversity: Samples by NDFA Group")
+bpu_all_boxplot_loc <- bpu_all_boxplot_loc + geom_boxplot(aes(fill = location)) +
+  labs(fill="Sample Location") +
+  xlab("Location") +
+  theme(legend.title = element_text(size = 14),
+        legend.text = element_text(face = "bold", size = 10),
+        title = element_text(face = "bold", size = 14),
+        axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(face = "bold", size = 13),
+        axis.text.y = element_text(size = 10))
+
+comps.bpu <- make_pairs(sample_data(bpu_cpm)$location)
+print(comps)
+
+adiv_loc.bpu <- bpu_all_boxplot_loc + stat_compare_means(
+  comparisons = comps.bpu,
+  label = "p.signif",
+  tip.length = 0.05,
+  symnum.args = list(
+    cutpoints = c(0, 0.0001, 0.001, 0.01, 0.05, 1), 
+    symbols = c("xxxx", "***", "**", "*", "ns")
+  ),
+  method = "wilcox.test")
+
+adiv_loc.bpu
+
+ggsave(filename = "./output/plots/bouru-jessica-alphadiv-plot.pdf", adiv_loc.bpu, device = "pdf", dpi = 600)
+
+```
+
+###### Points
+```{r}
+bpu_all_point_loc <- plot_richness(bpu_cpm, x = "location", measures = c("Shannon"))#, title = "Microbiome Alpha Diversity: Samples by NDFA Group")
+bpu_all_point_loc <- bpu_all_point_loc + geom_point(aes(color = location)) +
+  labs(color="Sample Location") +
+  xlab("Location") +
+  theme(legend.title = element_text(size = 14),
+        legend.text = element_text(face = "bold", size = 10),
+        title = element_text(face = "bold", size = 14),
+        axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        axis.title.y = element_text(face = "bold", size = 13),
+        axis.text.y = element_text(size = 10))
+
+comps.bpu <- make_pairs(sample_data(bpu_cpm)$location)
+print(comps)
+
+adiv_loc.bpu <- bpu_all_point_loc + stat_compare_means(
+  comparisons = comps.bpu,
+  label = "p.signif",
+  tip.length = 0.05,
+  symnum.args = list(
+    cutpoints = c(0, 0.0001, 0.001, 0.01, 0.05, 1), 
+    symbols = c("xxxx", "***", "**", "*", "ns")
+  ),
+  method = "wilcox.test")
+
+adiv_loc.bpu
+
+ggsave(filename = "./output/plots/bouru-jessica-alphadiv-point-plot.pdf", adiv_loc.bpu, device = "pdf", dpi = 600)
+
+```
+
+
+## Taxonomic Composition
+### By Location
+
+```{r}
+library(phyloseq)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(randomcoloR)
+
+# Set seed for reproducibility
+set.seed(123)
+
+### DECIDE how many taxa you want to see
+topN = 20 # top 20 taxa
+
+# Function to create a unique color palette
+create_palette <- function(topN) {
+  distinctColorPalette(topN + 1)
+}
+
+# Function to generate plot data for a given taxonomic rank
+generate_plot_data <- function(tax_rank, topN, physeq_obj) {
+  # Create a data frame of top taxa
+  topTaxa <- physeq_obj %>% 
+    psmelt() %>% 
+    group_by_at(vars(one_of(tax_rank))) %>%  # Dynamic grouping based on tax_rank
+    summarise(Abundance = sum(Abundance)) %>%
+    arrange(desc(Abundance)) %>%
+    slice_max(order_by = Abundance, n = topN) %>%  # Correct placement of slice_max
+    mutate(aggTaxo = factor(if_else(row_number() <= topN, as.character(.[[tax_rank]]), 'Others'))) %>%
+    ungroup()  # Ensure the data is ungrouped before proceeding
+
+  # Ensure the others_placeholder has the same structure as topTaxa
+  others_placeholder <- tibble(aggTaxo = factor('Others'))
+  if (ncol(topTaxa) > 1) {
+    # Add the same columns as in topTaxa, filled with appropriate default values
+    others_placeholder[setdiff(names(topTaxa), "aggTaxo")] <- NA
+  }
+  
+  # Ensure that 'Others' category is included in topTaxa
+  topTaxa <- rbind(topTaxa, others_placeholder)
+
+  # Create plot data by joining with a placeholder for "Others" to include it in the plot even if it's not in the topTaxa
+  plot_data <- physeq_obj %>%
+    psmelt() %>%
+    mutate(aggTaxo = if_else(as.character(.[[tax_rank]]) %in% topTaxa[[tax_rank]], as.character(.[[tax_rank]]), 'Others')) %>%
+    group_by(location, aggTaxo) %>%
+    summarise(Abundance = sum(Abundance), .groups = 'drop')  # Use .groups='drop' to avoid grouping issues
+
+  # Calculate total abundance for each location
+    total_abundance <- plot_data %>%
+        group_by(location) %>%
+        summarise(TotalAbundance = sum(Abundance), .groups = 'drop')
+
+    # Join total abundance with plot_data
+    plot_data <- left_join(plot_data, total_abundance, by = "location")
+
+    # Calculate relative abundance
+    plot_data <- plot_data %>%
+        mutate(RelativeAbundance = round(Abundance / TotalAbundance, 4))
+
+    # Create summary dataframe with normalized counts
+    summary_counts <- plot_data %>%
+        select(aggTaxo, location, Abundance) %>%
+        spread(key = location, value = Abundance)
+
+    # Create summary dataframe with relative abundances
+    summary_relative_abundance <- plot_data %>%
+        select(aggTaxo, location, RelativeAbundance) %>%
+        spread(key = location, value = RelativeAbundance)
+
+    # Replace NA with 0
+    summary_counts[is.na(summary_counts)] <- 0
+    summary_relative_abundance[is.na(summary_relative_abundance)] <- 0
+
+    return(list(plot_data = plot_data, 
+                topTaxa = topTaxa, 
+                summary_counts = summary_counts, 
+                summary_relative_abundance = summary_relative_abundance))
+}
+
+# Function to plot data
+plot_abundance <- function(plot_data, topTaxa, tax_rank, mycolors) {
+  ggplot(plot_data, aes(x = location, y = Abundance, fill = aggTaxo)) +
+    geom_bar(stat = "identity", position = "fill") +
+    labs(title = paste("Top", tax_rank, "by location"),
+         fill = tax_rank, x = "Location", y = "Relative abundance") +
+    scale_fill_manual(values = mycolors) +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),
+          legend.title = element_blank())
+}
+
+# Generate unique color palette for the top taxa
+mycolors <- create_palette(topN)
+
+# Loop through the desired taxonomic levels to generate plots and store summary dataframes
+for(tax_rank in c("Phylum", "Family", "Genus", "Species2")) {
+  # Generate plot data
+  plot_info <- generate_plot_data(tax_rank, topN, bpu_cpm) # insert phyloseq object name in last position
+  plot_data <- plot_info$plot_data
+  topTaxa <- plot_info$topTaxa
+  counts_df <- plot_info$summary_counts
+  relab_df <- plot_info$summary_relative_abundance
+  
+  # Define file names for plot and summary CSV
+  plot_file_name <- paste0("./output/plots/bpuru-jessica-relab_top_", tax_rank, "_location.pdf")
+  summary_counts_file_name <- paste0("./output/tables/bpuru-jessica-relab_top_", tax_rank, "_counts.csv")
+  summary_relab_file_name <- paste0("./output/tables/bpuru-jessica-relab_top_", tax_rank, "_relab.csv")
+
+  # Plot and save the figure
+  plot <- plot_abundance(plot_data, topTaxa, tax_rank, mycolors)
+  print(plot)
+  ggsave(plot_file_name, plot, width = 10, height = 8)
+
+  # Write cpm count dataframe to CSV
+  write.csv(counts_df, summary_counts_file_name, row.names = FALSE)
+  
+  # Write relative abundance dataframe to CSV
+  write.csv(relab_df, summary_relab_file_name, row.names = FALSE)
+}
+
+```
+
+```{r}
+tax_rank(bpu_cpm)
+```
+
+
+```{r}
+
+otu_mat <- otu_table(bpu_cpm)
+
+if (class(otu_mat) == "dgCMatrix") {
+  otu_mat <- as(otu_mat, "matrix")
+}
+
+otu_df <- as.data.frame(otu_mat)
+
+#otu_df <- t(otu_df)
+
+taxa <- tax_table(bpu_cpm)
+if (!is.null(taxa)) {
+  if (class(taxa) == "dgCMatrix") {
+    taxa <- as(taxa, "matrix")
+  }
+  taxa_df <- as.data.frame(taxa)
+
+  # Make sure that the rownames of taxa_df are the same as the column names of otu_df
+  # This should be true if the data has not been manipulated since creation
+  # If they are not, you should align them by ordering or other methods as needed.
+  rownames(otu_df) <- taxa_df$genus # or whichever taxonomic rank you prefer, like taxa_df$Genus
+}
+
+# You can access it directly for analyses or write it to a CSV file
+write.csv(otu_df, file = "otu_table.csv", row.names = TRUE)
+```
 
 
 

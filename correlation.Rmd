@@ -1,0 +1,123 @@
+---
+title: "tax_amr_correlation"
+author: "Shawn Higdon"
+date: "2023-11-09"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# libraries
+```{r, message=FALSE, include=FALSE}
+library(corrr)
+library(tidyverse)
+library(phyloseq)
+library(igraph)
+library(ggraph)
+library(corrplot)
+library(pheatmap)
+```
+
+```{r}
+sample_data <- read_csv("./data/sample_map_file.csv", col_names = T)
+```
+
+
+# UruUru-Poopo
+
+```{r}
+# Assume 'amr_phyloseq' and 'taxa_phyloseq' are the clr-normalized phyloseq objects
+taxa_matrix_normalized <- otu_table(bpu_cpm_clr)
+amr_matrix_normalized <- otu_table(amr.ps_uru)
+
+# Convert otu_table to a data frame/tibble
+taxa_df <- as.data.frame(taxa_matrix_normalized) %>%
+  rownames_to_column("Taxa") %>%
+  gather(SampleID, Abundance, -Taxa) %>%
+  spread(Taxa, Abundance) # Transform to wide format
+
+amr_df <- as.data.frame(amr_matrix_normalized) %>%
+  rownames_to_column("AMR") %>%
+  gather(SampleID, Abundance, -AMR) %>%
+  spread(AMR, Abundance) # Transform to wide format
+
+# Determine the most abundant taxa and genes
+# Here's a dummy function assuming 'topN' to get the top N taxa/genes
+get_top_abundant <- function(df, topN = 10) {
+  # Get sum across columns and take the topN
+  top_abundant <- colSums(df[, -1], na.rm = TRUE)  # Ignore the first column, which is the identifier
+  top_abundant <- sort(top_abundant, decreasing = TRUE)[1:topN]
+  df[, c("SampleID", names(top_abundant))]
+}
+
+# Let's say we select top 10 abundant taxa and AMR genes
+top_taxa_df <- get_top_abundant(taxa_df, topN = 10)
+top_amr_df <- get_top_abundant(amr_df, topN = 10)
+
+# Join the data frames based on SampleID
+combined_df <- left_join(top_taxa_df, top_amr_df, by = "SampleID")
+
+# location_data
+location_data <- sample_data |> dplyr::select(sample, location)
+
+# Assume 'sample_metadata' is a data frame with your sample metadata
+# We add the sample metadata to the combined data frame
+combined_df <- left_join(combined_df, sample_data(location_data), by = c("SampleID" = "sample"))
+
+# Perform correlation analysis within each location site
+correlation_results <- combined_df %>%
+  split(.$location) %>% # Split data by location
+  map(~correlate(.x, method = "spearman") %>% fashion()) # Perform correlation and tidy results
+
+```
+
+
+## Visualize
+
+
+### Heatmap
+```{r}
+# Loop through the list and create a heatmap for each location's correlation matrix
+names(correlation_results) <- names(combined_df$location)
+pdf("correlation_heatmaps.pdf")  # Save all heatmaps to a single PDF file
+for (location in names(correlation_results)) {
+  mat <- correlation_results[[location]]  # Get the correlation matrix for the location
+  if (!is.na(mat)) {  # Check if the result is not NA (which indicates not enough data)
+    pheatmap(as.matrix(mat), 
+             main = paste("Correlation for", location),
+             clustering_distance_rows = "euclidean",
+             clustering_distance_cols = "euclidean")
+  }
+}
+dev.off()  # Close the PDF device
+
+```
+
+
+### Correlogram
+```{r}
+
+# Create a directory for plots if it doesn't already exist
+if (!dir.exists("correlograms")) {
+  dir.create("correlograms")
+}
+
+# Loop through the list and create a correlogram for each location's correlation matrix
+for (location in names(correlation_results)) {
+  mat <- correlation_results[[location]]
+  if (any(!is.na(mat))) {  # Check if the result is not NA
+    # Open a new PNG device
+    png(file=paste0("correlograms/correlogram_", gsub(" ", "_", location), ".png"), width=800, height=800)
+    
+    # Generate the correlogram plot
+    corrplot(as.matrix(mat), method="circle", title=paste("Correlogram for", location))
+    
+    # Close the PNG device
+    dev.off()
+  }
+}
+
+```
+

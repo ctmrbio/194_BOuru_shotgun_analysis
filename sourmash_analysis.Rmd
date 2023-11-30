@@ -1,0 +1,143 @@
+---
+title: "Sourmash Analysis"
+author: "Shawn Higdon"
+date: "2023-08-22"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Libraries
+
+```{r}
+library(sourmashconsumr)
+library(tidyverse)
+library(RColorBrewer)
+library(ComplexHeatmap)
+library(randomcoloR)
+library(viridis)
+```
+## Metadata
+```{r}
+# create a metadata data frame 
+smash_map <- read.csv("data/sample_map_file.csv", header = T, stringsAsFactors = T)
+```
+
+## Sourmash Gather Data
+```{r}
+gather.files <- list.files(path = "data/sourmash_viral_gbk_k31/gather/",
+                      pattern = "*.csv",
+                      recursive = T, full.names = T)
+  
+gather_df.viral <- read_gather(gather.files, intersect_bp_threshold = 10000)
+head(gather_df.viral)
+```
+
+
+## Sourmash Compare
+
+
+### consumr
+
+#### MDS
+
+```{r}
+compare.file <- "./data/sourmash_compare_k51_milluni/milluni_smash_k51_cmp.csv"
+
+smash.cmp_df <- read_compare_csv(compare.file, sample_to_rownames = F)
+```
+
+```{r}
+viral_compare_mds_df |>
+  dplyr::left_join(smash_map, by = c("sample" = "sample"))
+
+plot_compare_mds(viral_compare_mds_df) +
+  ggplot2::geom_point(ggplot2::aes(color = "location"))
+
+```
+
+```{r}
+compare_plt <- plot_compare_mds(viral_compare_mds_df)
+compare_plt +
+  ggplot2::theme_minimal()
+```
+
+
+
+
+### Heatmap
+
+```{r}
+# sourmash compare similarity matrix
+smash.cmp.k51 <- read.csv("./data/sourmash_compare_k51_milluni/milluni_smash_k51_cmp.csv", header = T, check.names = F)
+
+# Check range of pairwise Jaccard Similarities
+range(smash.cmp.k51)
+
+# set rownames == colnames
+rownames(smash.cmp.k51) <- colnames(smash.cmp.k51)
+```
+
+
+```{r}
+# Plot
+
+## set plot params
+options(repr.plot.height=15, repr.plot.width = 15)
+
+## convert df to matrix
+milluni.smash.cmp.mat <- as.matrix(smash.cmp.k51[, 1:18])
+
+# make 'smash_mat' numeric in type
+class(milluni.smash.cmp.mat) <- "numeric"
+
+## set matrix color
+milluni.smash.cmp.mat.color <- magma(direction = -1, 10)
+
+## define affiliation annotation
+#milluni.smash.chm.src <- data.frame(Source = smash.cmp.k51$source)
+#milluni.smash.chm.gtdb_ref_strain <- data.frame(gtdb_ref = smash.cmp.k51$gtdb_ref_strain, gtdb_color = smash.cmp.k51$gtdb_color)
+
+## Plot Matrix
+milluni.smash.cmp_chm <- 
+  Heatmap(milluni.smash.cmp.mat,
+          name = "Jaccard Distance",
+          height = unit(24, "cm"),
+          width = unit(24, "cm"),
+          cluster_rows = T,
+          #rect_gp = gpar(col = "grey40", lwd = 0.05),
+          heatmap_legend_param = list(at = seq(0,
+                                               1, 0.1),
+                                      legend_direction = "horizontal",
+                                      legend_width = unit(8, "cm"),
+                                      nrow = 1,
+                                      border = "lightgrey",
+                                      title_position = "topleft",
+                                      title_gp = gpar(fontsize = 15, fontface = "bold"),
+                                      labels_gp = gpar(fontsize = 13, fontface = "bold")
+                                     ),
+          col = milluni.smash.cmp.mat.color,
+          row_names_gp = gpar(fontsize = 14, fontface = "bold"),
+          column_names_rot = 45,
+          column_names_side = "top",
+          show_column_names = FALSE,
+          show_column_dend = FALSE,
+          show_row_names = TRUE,
+          row_dend_width = unit(4, "cm")
+          )
+
+
+## Draw Plot
+
+draw(milluni.smash.cmp_chm, heatmap_legend_side = "bottom")
+
+# Save plot to PDF
+pdf("output/smash.cmp_chm_milluni-k51.pdf", width = 14, height = 13)
+draw(milluni.smash.cmp_chm, heatmap_legend_side = "bottom")
+dev.off()
+```
+
+
+

@@ -1,0 +1,22 @@
+"aggTaxo","Hot Spring wells","Poopó River","Sora Sora River","Tagarete River"
+"Acidobacteriota",0.008,0.0015,0.1057,8e-04
+"Actinobacteriota",0.0203,0.1149,0.1759,0.1052
+"Armatimonadota",0.0113,2e-04,3e-04,1e-04
+"Bacteroidota",0.1436,0.1334,0.0606,0.1486
+"Calescibacterota",0.0044,0,0,0
+"Campylobacterota",0,0.0111,0.001,0.0656
+"Chloroflexota",0.0176,0.0014,0.0031,0.0284
+"CSP1-3",0.0096,0,8e-04,0
+"Cyanobacteria",0.0167,0.0154,6e-04,0.0143
+"Deinococcota",0.0075,0,0,4e-04
+"Desulfobacterota",0.0092,0.0011,0.0032,0.0123
+"Desulfobacterota_F",4e-04,0.0015,0.0019,0.0315
+"Firmicutes",0.1931,0.0103,0.0094,0.0299
+"Firmicutes_A",0.056,0.005,0.0328,0.0661
+"Firmicutes_B",3e-04,6e-04,0.0269,0.0013
+"Halobacteriota",0.0015,2e-04,0,0.0079
+"Nitrospirota",0,0.005,0.0031,3e-04
+"Others",0.0038,0.0123,0.0392,0.0171
+"Planctomycetota",0.0026,0.0025,0.0013,0.0161
+"Proteobacteria",0.4933,0.6725,0.5224,0.4525
+"Verrucomicrobiota",9e-04,0.0111,0.0117,0.0016
